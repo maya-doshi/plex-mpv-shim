@@ -117,6 +117,10 @@ def get_plex_url(url, data=None, quiet=False):
 
     return url
 
+def urlopen_with_certifi(url):
+    context = ssl.create_default_context(cafile=certifi.where())
+    return urllib.request.urlopen(url, context=context)
+
 def safe_urlopen(url, data=None, quiet=False):
     """
     Opens a url and returns True if an HTTP 200 code is returned,
@@ -128,12 +132,10 @@ def safe_urlopen(url, data=None, quiet=False):
     url = get_plex_url(url, data, quiet)
 
     try:
-        context = ssl.create_default_context(cafile=certifi.where())
-        page = urllib.request.urlopen(url, context=context)
-        if page.code == 200:
-            return True
-        log.error("Error opening URL '%s': page returned %d" % (sanitize_msg(url),
-                                                                page.code))
+        with urlopen_with_certifi(url) as page:
+            if page.code == 200:
+                return True
+            log.error("Error opening URL '%s': page returned %d", sanitize_msg(url), page.code)
     except Exception as e:
         log.error("Error opening URL '%s':  %s" % (sanitize_msg(url), e))
 

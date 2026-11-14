@@ -3,10 +3,8 @@ from enum import Enum
 import logging
 import urllib.request, urllib.parse, urllib.error
 import urllib.parse
-import certifi
 import requests
 import uuid
-import ssl
 
 try:
     import xml.etree.cElementTree as et
@@ -14,7 +12,7 @@ except:
     import xml.etree.ElementTree as et
 
 from .conf import settings
-from .utils import get_plex_url, safe_urlopen, is_local_domain, get_transcode_session, clear_transcode_session, sanitize_msg
+from .utils import get_plex_url, safe_urlopen, is_local_domain, get_transcode_session, clear_transcode_session, sanitize_msg, urlopen_with_certifi
 
 log = logging.getLogger('media')
 
@@ -270,8 +268,9 @@ class Video(MediaItem):
         return audio_formats, protocols
 
     def get_decision(self, url, args):
-        context = ssl.create_default_context(cafile=certifi.where())
-        tree = et.parse(urllib.request.urlopen(get_plex_url(urllib.parse.urljoin(self.parent.server_url, url), args), context=context))
+        url = get_plex_url(urllib.parse.urljoin(self.parent.server_url, url), args)
+        with urlopen_with_certifi(url) as response:
+            tree = et.parse(response)
         treeRoot = tree.getroot()
         decisionText = treeRoot.get("generalDecisionText") or treeRoot.get("mdeDecisionText")
         decision = treeRoot.get("generalDecisionCode") or treeRoot.get("mdeDecisionCode")
@@ -548,8 +547,8 @@ class XMLCollection(object):
         """
         self.path       = urllib.parse.urlparse(url)
         self.server_url = self.path.scheme + "://" + self.path.netloc
-        self.context   = ssl.create_default_context(cafile=certifi.where())
-        self.tree       = et.parse(urllib.request.urlopen(get_plex_url(url), context=self.context))
+        with urlopen_with_certifi(get_plex_url(url)) as response:
+            self.tree = et.parse(response)
 
     def get_path(self, path):
         parsed_url = urllib.parse.urlparse(path)
@@ -707,9 +706,8 @@ class Media(XMLCollection):
 
     def get_machine_identifier(self):
         if not hasattr(self, "_machine_identifier"):
-            context = ssl.create_default_context(cafile=certifi.where())
-            doc = urllib.request.urlopen(get_plex_url(self.server_url), context=context)
-            tree = et.parse(doc)
+            with urlopen_with_certifi(get_plex_url(self.server_url)) as response:
+                tree = et.parse(response)
             setattr(self, "_machine_identifier", tree.find('.').get("machineIdentifier"))
         return getattr(self, "_machine_identifier", None)
 
